@@ -39,6 +39,7 @@ def run_battle(
     answer_delay: float = 1.5,
     auto_scan: bool = False,
     scan_radius: int = 5,
+    use_detailed_answer: bool = True,
 ) -> bool:
     """
     Runs a complete battle. Returns True if won, False if lost.
@@ -46,6 +47,9 @@ def run_battle(
     own_gc_id: the player's own gc_id (used as targetGcDecodedId in the API).
     auto_scan: if True, automatically scan nearby hexes when own territory is hit.
     answer_delay: seconds to wait before submitting (looks more human).
+    use_detailed_answer: if True, try /rooms/get_detailed_answer for the official
+                         answer before falling back to the LLM (free + 100% accurate
+                         in homework/mission modes).
     """
     cur_x, cur_y = hex_x, hex_y
     print(f"\n[battle] Starting {battle_type} on ({cur_x},{cur_y}) gc={own_gc_id}  (answer_delay={answer_delay}s)")
@@ -95,9 +99,22 @@ def run_battle(
             cost_time = 3
         else:
             t_start = time.time()
-            answer = solver.solve(pq)
+
+            # 1. Try the official answer endpoint (homework/mission modes expose it)
+            answer = None
+            if use_detailed_answer:
+                detail = gql.get_detailed_answer(session, pq.get("questionId"))
+                if detail:
+                    answer = Q.answer_from_detailed(pq, detail)
+                    if answer:
+                        print(f"  → Official answer: {answer} (from get_detailed_answer)")
+
+            # 2. Fall back to the LLM when the answer isn't exposed
+            if not answer:
+                answer = solver.solve(pq)
+                print(f"  → LLM answer: {answer}")
+
             cost_time = max(1, int(time.time() - t_start))
-            print(f"  → LLM answer: {answer}  (solved in {cost_time}s)")
 
             # Add delay to look more human (with slight jitter)
             target = answer_delay + random.uniform(-0.5, 1.5)

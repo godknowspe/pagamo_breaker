@@ -12,6 +12,7 @@ import time
 import httpx
 
 GRAPHQL_URL = "https://www.pagamo.org/graphql"
+DETAILED_ANSWER_URL = "https://www.pagamo.org/rooms/get_detailed_answer"
 
 _QUESTION_FIELDS = """
 fragment QuestionFields on InterfaceQuestion {
@@ -206,3 +207,27 @@ def submit_answer(
     if errors:
         raise RuntimeError(f"Submit error: {errors}")
     return data["submitRoom"]["battleResult"]
+
+
+def get_detailed_answer(session: httpx.Client, question_id) -> dict | None:
+    """
+    Fetches the correct answer for a question via /rooms/get_detailed_answer.
+
+    Works only for modes that expose answers (e.g. homework/mission with
+    show_answer=true). Returns the `question` dict (with 'answer', 'selections',
+    'show_answer', 'type') or None if unavailable / answer hidden.
+    """
+    if not question_id:
+        return None
+    try:
+        resp = session.post(DETAILED_ANSWER_URL, data={"id": question_id})
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("status") != "ok":
+            return None
+        q = (body.get("data") or {}).get("question")
+        if not q or not q.get("show_answer"):
+            return None
+        return q
+    except Exception:
+        return None
