@@ -1,0 +1,6 @@
+.env
+.pagamo_token
+.pagamo_cookies.json
+__pycache__/
+*.pyc
+.playwright/
