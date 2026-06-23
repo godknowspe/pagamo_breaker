@@ -35,7 +35,7 @@ def run_battle(
     answer_delay: seconds to wait before submitting (looks more human).
     """
     cur_x, cur_y = hex_x, hex_y
-    print(f"\n[battle] Starting {battle_type} on ({cur_x},{cur_y}) gc={own_gc_id}")
+    print(f"\n[battle] Starting {battle_type} on ({cur_x},{cur_y}) gc={own_gc_id}  (answer_delay={answer_delay}s)")
 
     # Start battle with automatic recovery for known transient errors
     while True:
