@@ -34,6 +34,7 @@ mutation AnswerOnMap($input: RoomAnswerOnMapInput!) {
   answerOnMap(input: $input) {
     gc {
       allowGiveUpAnswering
+      quota
       room {
         battleType
         endTimestamp
@@ -84,6 +85,9 @@ class RoomBusyError(Exception):
 
 class QuotaError(Exception):
     """Raised when quota is insufficient to start a battle."""
+    def __init__(self, errors, current_quota: float | None = None):
+        super().__init__(errors)
+        self.current_quota = current_quota  # None if server didn't return it
 
 class OwnTerritoryError(Exception):
     """Raised when trying to attack own territory (error FQJ3BPMZ)."""
@@ -163,20 +167,22 @@ def start_battle(
             "hexagonY": hex_y,
         },
     })
-    errors = data["answerOnMap"].get("errors", [])
+    payload = data["answerOnMap"]
+    errors = payload.get("errors", [])
+    # quota may be returned even alongside errors (GraphQL partial data)
+    current_quota: float | None = (payload.get("gc") or {}).get("quota")
+    if current_quota is not None:
+        print(f"[gql] Current quota: {current_quota:.1f}")
     if errors:
         codes = [e.get("code", "") for e in errors]
         if "GJ6MGRSJ" in codes:  # "Gc should not in room"
             raise RoomBusyError(errors)
         if "K3EF4FUQ" in codes:  # "Quota is not enough"
-            raise QuotaError(errors)
+            raise QuotaError(errors, current_quota=current_quota)
         if "FQJ3BPMZ" in codes:  # "這是自己的領土"
             raise OwnTerritoryError(errors)
         raise RuntimeError(f"Battle start error: {errors}")
-    gc = data["answerOnMap"]["gc"]
-    quota = gc.get("quota")
-    if quota is not None:
-        print(f"[gql] Quota: {quota:.1f}")
+    gc = payload["gc"]
     return gc["room"]["questions"]
 
 

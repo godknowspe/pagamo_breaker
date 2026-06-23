@@ -6,6 +6,7 @@ Usage:
   run_battle(session, hex_x=-5121, hex_y=-1450, own_gc_id=3389027)
   run_battle(session, hex_x=-5121, hex_y=-1450, own_gc_id=3389027, auto_scan=True)
 """
+import random
 import time
 from pagamo import graphql_client as gql
 from pagamo import question as Q
@@ -15,6 +16,18 @@ from llm import solver
 _ROOM_EXPIRE_SECONDS = 200   # max wait if room is busy and give-up fails
 _QUOTA_REGEN_RATE = 10.0     # quota per minute (600/hr from probe data)
 _QUOTA_PER_BATTLE = 30.0     # approximate cost per battle
+_QUOTA_JITTER = 20           # ±seconds of random jitter added to every wait
+
+
+def _quota_wait_seconds(current_quota: float | None) -> int:
+    if current_quota is not None:
+        deficit = max(0.0, _QUOTA_PER_BATTLE - current_quota)
+        base = int(deficit / _QUOTA_REGEN_RATE * 60) + 10
+        print(f"[battle]   current quota={current_quota:.1f}, deficit={deficit:.1f}, base wait={base}s")
+    else:
+        base = int(_QUOTA_PER_BATTLE / _QUOTA_REGEN_RATE * 60) + 10
+    jitter = random.randint(-_QUOTA_JITTER // 2, _QUOTA_JITTER)
+    return max(30, base + jitter)
 
 
 def run_battle(
@@ -49,10 +62,9 @@ def run_battle(
             else:
                 print(f"[battle] Give up failed. Waiting {_ROOM_EXPIRE_SECONDS}s for room to expire...")
                 time.sleep(_ROOM_EXPIRE_SECONDS)
-        except gql.QuotaError:
-            wait_min = _QUOTA_PER_BATTLE / _QUOTA_REGEN_RATE
-            wait_sec = int(wait_min * 60) + 5
-            print(f"[battle] Quota insufficient. Waiting {wait_sec}s (~{wait_min:.1f} min) to regenerate...")
+        except gql.QuotaError as e:
+            wait_sec = _quota_wait_seconds(e.current_quota)
+            print(f"[battle] Quota insufficient. Waiting {wait_sec}s to regenerate...")
             for remaining in range(wait_sec, 0, -10):
                 print(f"  {remaining}s remaining...", end="\r", flush=True)
                 time.sleep(min(10, remaining))
@@ -87,10 +99,11 @@ def run_battle(
             cost_time = max(1, int(time.time() - t_start))
             print(f"  → LLM answer: {answer}  (solved in {cost_time}s)")
 
-            # Add delay to look more human
+            # Add delay to look more human (with slight jitter)
+            target = answer_delay + random.uniform(-0.5, 1.5)
             elapsed = time.time() - t_start
-            if elapsed < answer_delay:
-                time.sleep(answer_delay - elapsed)
+            if elapsed < target:
+                time.sleep(target - elapsed)
 
         result = gql.submit_answer(
             session,
