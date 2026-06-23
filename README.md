@@ -23,6 +23,7 @@ httpx API client  ◄─────────────┘
 - LLM-powered answering (Google Gemini by default, Claude as fallback)
 - Auto-retry on quota exhaustion with countdown timer
 - Auto-recovery from stuck battle rooms (`giveUpQuestion`)
+- Auto map scan — finds nearest attackable enemy hex when current target is own territory
 - `--repeat N` flag for running multiple battles in sequence
 
 ## Setup
@@ -49,31 +50,37 @@ LLM_PROVIDER=gemini          # gemini | anthropic
 GOOGLE_API_KEY=AIza...        # from aistudio.google.com/apikey
 GEMINI_MODEL=gemini-2.5-flash
 
-# Default battle target (override with CLI flags)
+# One of your own territory hexes (used as starting point for auto-scan)
 HEX_X=-5121
 HEX_Y=-1450
-TARGET_GC_ID=3389027
+
+# Your own game character ID
+MY_GC_ID=3389027
 ```
 
 ## Usage
 
 ```bash
-# Single battle at a specific hex coordinate
-python main.py --hex-x -5121 --hex-y -1450 --target 3389027
+# Attack mode: auto-scans for nearest enemy hex from your starting hex
+python main.py
 
-# Run 10 battles in sequence (auto-waits for quota between battles)
-python main.py --hex-x -5121 --hex-y -1450 --target 3389027 --repeat 10
+# Run 10 battles in sequence (auto-waits for quota, auto-finds new targets)
+python main.py --repeat 10
 
-# Training mode instead of attack
-python main.py --hex-x -5121 --hex-y -1450 --target 3389027 --type train
+# Training mode on own hex (no scan needed)
+python main.py --hex-x -5121 --hex-y -1450 --type train
+
+# Larger scan radius if default (5) doesn't find enemies
+python main.py --radius 10
 ```
 
-## Finding hex coordinates and target ID
+## Finding your hex coordinates and gc_id
 
 1. Open [PaGamO map](https://www.pagamo.org/map) in Chrome
 2. Open DevTools → Network tab
-3. Click on an enemy hex to initiate a battle
-4. Look for the `hexagon_info` or `answerOnMap` request — the coordinates and `targetGcDecodedId` are in the request body
+3. Click on any of your own hexes
+4. Look for the `hexagon_info` request — `x` and `y` are the coordinates
+5. Your `MY_GC_ID` appears in any `graphql` response as `gamecharacter.id`
 
 ## Project structure
 
@@ -82,9 +89,9 @@ main.py                  entry point, CLI argument parsing
 pagamo/
   auth.py                Playwright login, cookie caching
   graphql_client.py      GraphQL mutations (answerOnMap, submitRoom, giveUpQuestion)
-  map_battle.py          battle loop with quota/room-busy recovery
+  map_battle.py          battle loop with quota/room-busy/own-territory recovery
+  map_scanner.py         hexagon_info scanner — finds nearest attackable enemy hex
   question.py            parse GraphQL question objects → clean dict
-  selectors.py           CSS selectors (kept for reference, not actively used)
 llm/
   solver.py              Gemini / Claude answer solver
 tools/
@@ -95,7 +102,8 @@ tools/
 
 - **Quota system**: each battle costs ~30 quota; regen rate is 600/hr (~3 min/battle). The bot waits automatically.
 - **Fill-in questions**: not yet automated — skipped with a blank answer.
-- **Fixed target**: the bot currently attacks a hardcoded hex. Auto-targeting (scan nearby hexes and pick a valid target) is the next planned feature.
+- **Training cap**: own hexes can only be trained up to a server-side limit per period.
+- **Scan speed**: auto-scan calls `hexagon_info` per hex; radius=5 checks up to ~120 hexes (~10-30 s).
 
 ## Disclaimer
 

@@ -3,11 +3,13 @@ Map battle automation.
 
 Usage:
   from pagamo.map_battle import run_battle
-  run_battle(session, hex_x=-5121, hex_y=-1450, target_gc_decoded_id=3389027)
+  run_battle(session, hex_x=-5121, hex_y=-1450, own_gc_id=3389027)
+  run_battle(session, hex_x=-5121, hex_y=-1450, own_gc_id=3389027, auto_scan=True)
 """
 import time
 from pagamo import graphql_client as gql
 from pagamo import question as Q
+from pagamo import map_scanner
 from llm import solver
 
 _ROOM_EXPIRE_SECONDS = 200   # max wait if room is busy and give-up fails
@@ -19,24 +21,30 @@ def run_battle(
     session,
     hex_x: int,
     hex_y: int,
-    target_gc_decoded_id: int,
+    own_gc_id: int,
     battle_type: str = "attack",
     answer_delay: float = 1.5,
+    auto_scan: bool = False,
+    scan_radius: int = 5,
 ) -> bool:
     """
     Runs a complete battle. Returns True if won, False if lost.
+
+    own_gc_id: the player's own gc_id (used as targetGcDecodedId in the API).
+    auto_scan: if True, automatically scan nearby hexes when own territory is hit.
     answer_delay: seconds to wait before submitting (looks more human).
     """
-    print(f"\n[battle] Starting {battle_type} on ({hex_x},{hex_y}) gc={target_gc_decoded_id}")
+    cur_x, cur_y = hex_x, hex_y
+    print(f"\n[battle] Starting {battle_type} on ({cur_x},{cur_y}) gc={own_gc_id}")
 
     # Start battle with automatic recovery for known transient errors
     while True:
         try:
-            questions = gql.start_battle(session, hex_x, hex_y, target_gc_decoded_id, battle_type)
+            questions = gql.start_battle(session, cur_x, cur_y, own_gc_id, battle_type)
             break
         except gql.RoomBusyError:
             print("[battle] Still in a room — trying to give up...")
-            if gql.give_up(session, hex_x, hex_y, target_gc_decoded_id, battle_type):
+            if gql.give_up(session, cur_x, cur_y, own_gc_id, battle_type):
                 time.sleep(2)
             else:
                 print(f"[battle] Give up failed. Waiting {_ROOM_EXPIRE_SECONDS}s for room to expire...")
@@ -49,6 +57,17 @@ def run_battle(
                 print(f"  {remaining}s remaining...", end="\r", flush=True)
                 time.sleep(min(10, remaining))
             print()
+        except gql.OwnTerritoryError:
+            if not auto_scan or battle_type != "attack":
+                print("[battle] Target is own territory. Use --auto to scan for enemy hexes.")
+                return False
+            print("[battle] Target is own territory — scanning for enemy hexes...")
+            result = map_scanner.find_attack_target(session, cur_x, cur_y, own_gc_id, scan_radius)
+            if result is None:
+                print("[battle] No enemy hex found nearby. Expand radius or move to a new area.")
+                return False
+            cur_x, cur_y = result
+            print(f"[battle] New target: ({cur_x},{cur_y})")
 
     print(f"[battle] {len(questions)} question(s) received")
 
@@ -75,7 +94,7 @@ def run_battle(
 
         result = gql.submit_answer(
             session,
-            target_gc_decoded_id=target_gc_decoded_id,
+            target_gc_decoded_id=own_gc_id,
             question_id=pq["id"],
             answer=answer,
             cost_time=cost_time,

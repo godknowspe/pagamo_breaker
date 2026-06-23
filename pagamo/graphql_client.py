@@ -85,6 +85,9 @@ class RoomBusyError(Exception):
 class QuotaError(Exception):
     """Raised when quota is insufficient to start a battle."""
 
+class OwnTerritoryError(Exception):
+    """Raised when trying to attack own territory (error FQJ3BPMZ)."""
+
 
 def _gql(session: httpx.Client, query: str, variables: dict) -> dict:
     resp = session.post(GRAPHQL_URL, json={"query": query, "variables": variables})
@@ -167,6 +170,8 @@ def start_battle(
             raise RoomBusyError(errors)
         if "K3EF4FUQ" in codes:  # "Quota is not enough"
             raise QuotaError(errors)
+        if "FQJ3BPMZ" in codes:  # "這是自己的領土"
+            raise OwnTerritoryError(errors)
         raise RuntimeError(f"Battle start error: {errors}")
     gc = data["answerOnMap"]["gc"]
     quota = gc.get("quota")
