@@ -70,14 +70,14 @@ async def _browser_login(account: str, password: str) -> list[dict]:
     return cookies
 
 
-def _save_cookies(cookies: list[dict]):
-    COOKIE_CACHE.write_text(json.dumps(cookies))
+def _save_cookies(cookies: list[dict], path: Path = COOKIE_CACHE):
+    path.write_text(json.dumps(cookies))
 
 
-def _load_cookies() -> list[dict] | None:
-    if COOKIE_CACHE.exists():
+def _load_cookies(path: Path = COOKIE_CACHE) -> list[dict] | None:
+    if path.exists():
         try:
-            return json.loads(COOKIE_CACHE.read_text())
+            return json.loads(path.read_text())
         except Exception:
             return None
     return None
@@ -102,22 +102,26 @@ def _verify_session(session: httpx.Client) -> bool:
     return False
 
 
-def login(account: str, password: str) -> httpx.Client:
+def login(account: str, password: str, cookie_path: Path = COOKIE_CACHE) -> httpx.Client:
     """
     Returns an authenticated httpx.Client.
     Uses cached cookies if still valid; otherwise opens browser for login.
+
+    cookie_path lets a second account use its own cookie cache file so the two
+    sessions don't overwrite each other.
     """
-    cached = _load_cookies()
+    cookie_path = Path(cookie_path)
+    cached = _load_cookies(cookie_path)
     if cached:
         session = _make_session(cached)
         if _verify_session(session):
-            print("[auth] Using cached session")
+            print(f"[auth] Using cached session ({cookie_path.name})")
             return session
         print("[auth] Cached session expired, re-logging in...")
 
     print("[auth] Opening browser for login (handles reCAPTCHA automatically)...")
     cookies = asyncio.run(_browser_login(account, password))
-    _save_cookies(cookies)
+    _save_cookies(cookies, cookie_path)
 
     session = _make_session(cookies)
     if not _verify_session(session):

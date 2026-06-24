@@ -41,6 +41,7 @@ def run_battle(
     auto_scan: bool = False,
     scan_radius: int = 5,
     use_cache: bool = True,
+    oracle=None,
 ) -> bool:
     """
     Runs a complete battle. Returns True if won, False if lost.
@@ -50,6 +51,8 @@ def run_battle(
     answer_delay: seconds to wait before submitting (looks more human).
     use_cache: if True, answer from the learned cache when a questionId repeats,
                and after each battle fetch official answers (out-of-room) to grow it.
+    oracle: optional pagamo.oracle.Oracle (second account) that resolves the
+            official answer in real time before falling back to the LLM.
     """
     cur_x, cur_y = hex_x, hex_y
     tried: set = set()   # hexes that failed (own territory / no questions) — skip on rescan
@@ -129,7 +132,15 @@ def run_battle(
                 if answer:
                     print(f"  → Cached answer: {answer}")
 
-            # 2. Fall back to the LLM for first-time questions
+            # 2. Oracle — second account looks up the official answer in real time (100%)
+            if not answer and oracle is not None:
+                answer = oracle.answer(pq)
+                if answer:
+                    print(f"  → Oracle answer: {answer} (helper account)")
+                    if use_cache:
+                        answer_cache.put(pq.get("questionId"), answer)
+
+            # 3. Fall back to the LLM for first-time questions
             if not answer:
                 answer = solver.solve(pq)
                 print(f"  → LLM answer: {answer}")
