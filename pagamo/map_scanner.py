@@ -32,8 +32,6 @@ def _is_attackable(info: dict, own_gc_id: int) -> bool:
         return False
     if info.get("protection_expire_time") is not None:
         return False
-    if not info.get("owner_gc_id"):
-        return False
     return True
 
 
@@ -72,9 +70,12 @@ def find_attack_target(
             if info is None:
                 continue
             if _is_attackable(info, own_gc_id):
-                nick = info.get("owner_nickname", "?")
                 gc = info.get("owner_gc_id")
-                print(f"[scan] Found target at ({x},{y}) — {nick} (gc={gc})  [{checked} hexes checked]")
+                if gc:
+                    nick = info.get("owner_nickname", "?")
+                    print(f"[scan] Found enemy at ({x},{y}) — {nick} (gc={gc})  [{checked} hexes checked]")
+                else:
+                    print(f"[scan] Found empty hex at ({x},{y})  [{checked} hexes checked]")
                 return x, y
 
     print(f"[scan] No target found after checking {checked} hexes")
