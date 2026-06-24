@@ -124,7 +124,12 @@ def give_up(
                 "hexagonY": hex_y,
             },
         })
-        questions = data["answerOnMap"]["gc"]["room"].get("questions", [])
+        gc = data["answerOnMap"].get("gc")
+        room = gc.get("room") if gc else None
+        if not room:
+            # answerOnMap errored (e.g. GJ6MGRSJ) — no room payload to give up from
+            return False
+        questions = room.get("questions", [])
         if not questions:
             return False
 
@@ -213,9 +218,10 @@ def get_detailed_answer(session: httpx.Client, question_id) -> dict | None:
     """
     Fetches the correct answer for a question via /rooms/get_detailed_answer.
 
-    Works only for modes that expose answers (e.g. homework/mission with
-    show_answer=true). Returns the `question` dict (with 'answer', 'selections',
-    'show_answer', 'type') or None if unavailable / answer hidden.
+    NOTE: this only works when NOT in an answering room — the server blocks it
+    in-room with {"status":"error","data":"should not in room"}. Call it after a
+    battle ends. Returns the `question` dict (with 'answer', 'selections', 'type',
+    nested render_info) or None if unavailable / answer hidden / still in room.
     """
     if not question_id:
         return None
@@ -224,10 +230,15 @@ def get_detailed_answer(session: httpx.Client, question_id) -> dict | None:
         resp.raise_for_status()
         body = resp.json()
         if body.get("status") != "ok":
-            return None
+            return None  # e.g. "should not in room"
         q = (body.get("data") or {}).get("question")
-        if not q or not q.get("show_answer"):
+        # answer lives at the top level of the question object when exposed
+        if not q or q.get("answer") in (None, ""):
             return None
+        # flatten render_info fields (selections, show_answer) for convenience
+        render = q.get("render_info") or {}
+        if "selections" not in q and "selections" in render:
+            q["selections"] = render["selections"]
         return q
     except Exception:
         return None

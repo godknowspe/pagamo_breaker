@@ -1,6 +1,9 @@
 .env
 .pagamo_token
 .pagamo_cookies.json
+.answer_cache.json
 __pycache__/
 *.pyc
 .playwright/
+.venv/
+probe_output.json

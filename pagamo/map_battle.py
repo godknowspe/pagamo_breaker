@@ -11,6 +11,7 @@ import time
 from pagamo import graphql_client as gql
 from pagamo import question as Q
 from pagamo import map_scanner
+from pagamo import answer_cache
 from llm import solver
 
 _ROOM_EXPIRE_SECONDS = 200   # max wait if room is busy and give-up fails
@@ -39,7 +40,7 @@ def run_battle(
     answer_delay: float = 1.5,
     auto_scan: bool = False,
     scan_radius: int = 5,
-    use_detailed_answer: bool = True,
+    use_cache: bool = True,
 ) -> bool:
     """
     Runs a complete battle. Returns True if won, False if lost.
@@ -47,9 +48,8 @@ def run_battle(
     own_gc_id: the player's own gc_id (used as targetGcDecodedId in the API).
     auto_scan: if True, automatically scan nearby hexes when own territory is hit.
     answer_delay: seconds to wait before submitting (looks more human).
-    use_detailed_answer: if True, try /rooms/get_detailed_answer for the official
-                         answer before falling back to the LLM (free + 100% accurate
-                         in homework/mission modes).
+    use_cache: if True, answer from the learned cache when a questionId repeats,
+               and after each battle fetch official answers (out-of-room) to grow it.
     """
     cur_x, cur_y = hex_x, hex_y
     print(f"\n[battle] Starting {battle_type} on ({cur_x},{cur_y}) gc={own_gc_id}  (answer_delay={answer_delay}s)")
@@ -89,8 +89,8 @@ def run_battle(
 
     victory = None
     t_start = 0.0
-    for i, raw_q in enumerate(questions, 1):
-        pq = Q.parse(raw_q)
+    parsed = [Q.parse(raw_q) for raw_q in questions]
+    for i, pq in enumerate(parsed, 1):
         print(f"\n[Q{i}] {Q.display(pq)}")
 
         if pq["type"] in ("fillin", "unknown"):
@@ -100,16 +100,14 @@ def run_battle(
         else:
             t_start = time.time()
 
-            # 1. Try the official answer endpoint (homework/mission modes expose it)
+            # 1. Cache hit — official answer learned from a previous battle (free, 100%)
             answer = None
-            if use_detailed_answer:
-                detail = gql.get_detailed_answer(session, pq.get("questionId"))
-                if detail:
-                    answer = Q.answer_from_detailed(pq, detail)
-                    if answer:
-                        print(f"  → Official answer: {answer} (from get_detailed_answer)")
+            if use_cache:
+                answer = answer_cache.get(pq.get("questionId"))
+                if answer:
+                    print(f"  → Cached answer: {answer}")
 
-            # 2. Fall back to the LLM when the answer isn't exposed
+            # 2. Fall back to the LLM for first-time questions
             if not answer:
                 answer = solver.solve(pq)
                 print(f"  → LLM answer: {answer}")
@@ -137,4 +135,26 @@ def run_battle(
             print(f"  ⚠ Can't answer: {cantAnswer.get('reason')}")
             break
 
+    # Room is over now — learn official answers for next time (only works out-of-room)
+    if use_cache:
+        _learn_answers(session, parsed)
+
     return bool(victory)
+
+
+def _learn_answers(session, parsed: list[dict]) -> None:
+    """After a battle ends, fetch the official answer for each question and cache it."""
+    learned = 0
+    for pq in parsed:
+        qid = pq.get("questionId")
+        if qid is None or answer_cache.get(qid) is not None:
+            continue
+        detail = gql.get_detailed_answer(session, qid)
+        if not detail:
+            continue
+        ans = Q.answer_from_detailed(pq, detail)
+        if ans:
+            answer_cache.put(qid, ans)
+            learned += 1
+    if learned:
+        print(f"[cache] Learned {learned} official answer(s) (total cached: {answer_cache.size()})")

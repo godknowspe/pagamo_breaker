@@ -40,6 +40,8 @@ def main():
     parser.add_argument("--delay", type=float,
                         default=float(os.getenv("ANSWER_DELAY", "7")),
                         help="Seconds to wait before submitting each answer (default 7, Gemini free tier needs >=6)")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Disable the learned answer cache (always use the LLM)")
     args = parser.parse_args()
 
     if not args.gc_id:
@@ -68,6 +70,7 @@ def main():
             auto_scan=auto_scan,
             scan_radius=args.radius,
             answer_delay=args.delay,
+            use_cache=not args.no_cache,
         )
         if won:
             wins += 1
