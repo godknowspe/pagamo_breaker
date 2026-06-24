@@ -9,22 +9,26 @@ Browser (Playwright) ──► Login + Cookie capture
                                 │
 httpx API client  ◄─────────────┘
         │
-        ├─► POST /graphql  answerOnMap   ── start battle, receive questions
-        ├─► LLM (Gemini / Claude)        ── answer each question
-        └─► POST /graphql  submitRoom    ── submit answer, get result
+        ├─► POST /graphql  answerOnMap        ── start battle, receive questions
+        ├─► answer cache  ──► hit? use it      ── free, 100% correct for seen questions
+        ├─► LLM (Gemini / Claude)              ── fallback for first-time questions
+        ├─► POST /graphql  submitRoom          ── submit answer, get result
+        └─► POST /rooms/get_detailed_answer    ── after battle: learn official answers
 ```
 
 **No DOM scraping** — all game state is delivered via GraphQL JSON. The browser is only opened once to handle reCAPTCHA login; all subsequent battles run headlessly through the API.
+
+**Answer cache:** PaGamO exposes correct answers via `POST /rooms/get_detailed_answer`, but only when you're *not* in an answering room (it's blocked in-room with `should not in room` — you can't peek before submitting). So after each battle ends, the bot fetches the official answers and caches them by `questionId` in `.answer_cache.json`. Question banks repeat, so over time LLM usage drops and accuracy rises to 100% for previously-seen questions.
 
 ## Features
 
 - Automatic login with reCAPTCHA handling (Playwright)
 - Session cookie caching — browser opens only on first run or after expiry
-- LLM-powered answering (Google Gemini by default, Claude as fallback)
+- Learned answer cache — official answers fetched post-battle, reused for free on repeats
+- LLM-powered answering (Google Gemini by default, Claude as fallback) for new questions
 - Auto-retry on quota exhaustion with countdown timer
-- Auto-recovery from stuck battle rooms (`giveUpQuestion`)
 - Auto map scan — finds nearest attackable enemy hex when current target is own territory
-- `--repeat N` flag for running multiple battles in sequence
+- `--repeat N` for multiple battles, `--no-cache` to disable the cache
 
 ## Setup
 
