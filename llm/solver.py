@@ -3,7 +3,7 @@ LLM solver — takes a parsed question dict, returns answer in submitRoom format
 
 Return value is always list[str], e.g.:
   TrueOrFalse → ["O"] or ["X"]
-  Choice      → ["2"]
+  Choice      → ["A"]  (letter position)
 """
 import os
 
@@ -24,8 +24,9 @@ def solve(pq: dict) -> list[str]:
 def _build_prompt(pq: dict) -> str:
     opts = "\n".join(f"  {k}: {v}" for k, v in pq["options"].items())
     return (
-        "以下是一道選擇題或是非題，請直接回答最正確的選項 key（例如 O、X、0、1、2 等），"
-        "不要解釋，只回答一個字或數字。\n\n"
+        "以下是一道選擇題或是非題，請直接回答最正確的選項代號"
+        "（是非題回答 O 或 X；選擇題回答選項字母，例如 A、B、C、D），"
+        "不要解釋，只回答一個代號。\n\n"
         f"題目：{pq['text']}\n\n選項：\n{opts}\n\n答案："
     )
 

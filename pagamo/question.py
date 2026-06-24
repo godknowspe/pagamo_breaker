@@ -3,9 +3,11 @@ Parse raw GraphQL question dicts into clean format for LLM solving.
 
 Answer format per type (matches what submitRoom expects):
   TrueOrFalse → ["O"] (是) or ["X"] (否)
-  Choice      → [str(position)]  e.g. ["0"], ["2"]
+  Choice      → [position]  where position is a LETTER, e.g. ["A"], ["C"]
+                (PaGamO Choice selections are keyed by alphabet, not 0-based index)
   FillIn      → [text]  (not yet automated)
 """
+import re
 from html.parser import HTMLParser
 
 
@@ -34,7 +36,7 @@ def parse(q: dict) -> dict:
       text    : plain-text question
       options : {answer_value: display_text}
                 TrueOrFalse → {"O": "是 (True)", "X": "否 (False)"}
-                Choice      → {"0": "...", "1": "...", ...}
+                Choice      → {"A": "...", "B": "...", ...}  (letter positions)
       id      : GraphQL decoded id (used in submitRoom)
     """
     type_name = (q.get("typeName") or q.get("__typename") or "").lower()
@@ -90,20 +92,21 @@ def answer_from_detailed(pq: dict, detail: dict) -> list[str] | None:
         return [raw_list[0].upper()]
 
     if pq["type"] == "choice":
-        selections = detail.get("selections") or []
         out: list[str] = []
+        # Most reliable: the is_answer flags on the detailed selections.
+        for sel in detail.get("selections") or []:
+            if isinstance(sel, dict) and sel.get("is_answer"):
+                pos = str(sel.get("position"))
+                if pos in pq["options"]:
+                    out.append(pos)
+        if out:
+            return out
+        # Fallback: the `answer` field is the letter position(s), e.g. "A" or "A,C".
         for a in raw_list:
-            if a.isdigit() and a in pq["options"]:
-                out.append(a)                       # already a position
-            elif a in selections:
-                out.append(str(selections.index(a)))  # match by content order
-            else:
-                # try matching against parsed option text
-                match = next((k for k, v in pq["options"].items()
-                              if v == strip_html(a)), None)
-                if match is None:
-                    return None
-                out.append(match)
+            for token in re.split(r"[,\s]+", a):
+                token = token.strip().upper()
+                if token in pq["options"]:
+                    out.append(token)
         return out or None
 
     # fillin / unknown — not handled here
