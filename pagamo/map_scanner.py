@@ -43,14 +43,17 @@ def find_attack_target(
     center_y: int,
     own_gc_id: int,
     radius: int = 5,
+    exclude: set | None = None,
 ) -> tuple[int, int] | None:
     """
     Scans hexes around (center_x, center_y) in a spiral to find an attackable enemy hex.
     Returns (hex_x, hex_y) or None if no target found within radius.
 
     'Attackable' means: owned by someone else, no protection, cant_fight_status is null.
+    exclude: a set of (x, y) tuples to skip (e.g. hexes that already failed).
     The caller should pass own_gc_id as targetGcDecodedId when starting the battle.
     """
+    exclude = exclude or set()
     print(f"[scan] Scanning radius {radius} around ({center_x},{center_y})...")
     checked = 0
 
@@ -62,6 +65,8 @@ def find_attack_target(
                     candidates.append((center_x + dx, center_y + dy))
 
         for x, y in candidates:
+            if (x, y) in exclude:
+                continue
             info = get_hex_info(session, x, y, own_gc_id)
             checked += 1
             if info is None:

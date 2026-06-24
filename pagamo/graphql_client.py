@@ -93,6 +93,9 @@ class QuotaError(Exception):
 class OwnTerritoryError(Exception):
     """Raised when trying to attack own territory (error FQJ3BPMZ)."""
 
+class NoQuestionsError(Exception):
+    """Raised when the hex/mission has no answerable questions left (error 9PCK5KN6)."""
+
 
 def _gql(session: httpx.Client, query: str, variables: dict) -> dict:
     resp = session.post(GRAPHQL_URL, json={"query": query, "variables": variables})
@@ -187,6 +190,8 @@ def start_battle(
             raise QuotaError(errors, current_quota=current_quota)
         if "FQJ3BPMZ" in codes:  # "這是自己的領土"
             raise OwnTerritoryError(errors)
+        if "9PCK5KN6" in codes:  # "No available question to answer"
+            raise NoQuestionsError(errors)
         raise RuntimeError(f"Battle start error: {errors}")
     gc = payload["gc"]
     return gc["room"]["questions"]

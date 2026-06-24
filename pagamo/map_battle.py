@@ -52,7 +52,33 @@ def run_battle(
                and after each battle fetch official answers (out-of-room) to grow it.
     """
     cur_x, cur_y = hex_x, hex_y
+    tried: set = set()   # hexes that failed (own territory / no questions) — skip on rescan
+    no_question_hits = 0  # consecutive "no available question" failures
     print(f"\n[battle] Starting {battle_type} on ({cur_x},{cur_y}) gc={own_gc_id}  (answer_delay={answer_delay}s)")
+
+    def _rescan(reason: str) -> bool:
+        """Find the next enemy target, skipping already-tried hexes. Returns False to abort."""
+        nonlocal cur_x, cur_y
+        if not auto_scan or battle_type != "attack":
+            print(f"[battle] {reason}. Use attack mode with auto-scan to find another hex.")
+            return False
+        tried.add((cur_x, cur_y))
+        print(f"[battle] {reason} — scanning for another enemy hex...")
+        result = map_scanner.find_attack_target(
+            session, cur_x, cur_y, own_gc_id, scan_radius, exclude=tried)
+        if result is None:
+            if no_question_hits >= 3:
+                # Every scanned enemy hex had no questions → mission/daily bank exhausted,
+                # not a coverage problem. Expanding the radius won't help.
+                print("[battle] Every nearby enemy hex reports 'no available question'.")
+                print("[battle] You've likely used up this mission's question bank for now —")
+                print("[battle] try again later, or switch to a different mission/region.")
+            else:
+                print("[battle] No other enemy hex found nearby. Expand --radius or move to a new area.")
+            return False
+        cur_x, cur_y = result
+        print(f"[battle] New target: ({cur_x},{cur_y})")
+        return True
 
     # Start battle with automatic recovery for known transient errors
     while True:
@@ -74,16 +100,12 @@ def run_battle(
                 time.sleep(min(10, remaining))
             print()
         except gql.OwnTerritoryError:
-            if not auto_scan or battle_type != "attack":
-                print("[battle] Target is own territory. Use --auto to scan for enemy hexes.")
+            if not _rescan("Target is own territory"):
                 return False
-            print("[battle] Target is own territory — scanning for enemy hexes...")
-            result = map_scanner.find_attack_target(session, cur_x, cur_y, own_gc_id, scan_radius)
-            if result is None:
-                print("[battle] No enemy hex found nearby. Expand radius or move to a new area.")
+        except gql.NoQuestionsError:
+            no_question_hits += 1
+            if not _rescan("No questions available on this hex"):
                 return False
-            cur_x, cur_y = result
-            print(f"[battle] New target: ({cur_x},{cur_y})")
 
     print(f"[battle] {len(questions)} question(s) received")
 
