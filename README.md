@@ -95,6 +95,7 @@ pagamo/
   graphql_client.py      GraphQL mutations (answerOnMap, submitRoom, giveUpQuestion)
   map_battle.py          battle loop with quota/room-busy/own-territory recovery
   map_scanner.py         hexagon_info scanner — finds nearest attackable enemy hex
+  answer_cache.py        persistent JSON cache keyed by questionId
   question.py            parse GraphQL question objects → clean dict
 llm/
   solver.py              Gemini / Claude answer solver

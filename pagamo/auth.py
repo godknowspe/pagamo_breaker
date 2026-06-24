@@ -93,10 +93,21 @@ def _make_session(cookies: list[dict]) -> httpx.Client:
 def _verify_session(session: httpx.Client) -> bool:
     try:
         r = session.post("/users/get_user_info_for_websocket")
-        data = r.json()
-        if r.status_code == 200 and data.get("id"):
-            print(f"[auth] Session valid — nickname: {data.get('nickname')}")
-            return True
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("id"):
+                print(f"[auth] Session valid — nickname: {data.get('nickname')}")
+                return True
+    except Exception:
+        pass
+    # Fallback for accounts where the gc endpoint returns 500 (e.g. no active class)
+    try:
+        r = session.post("/users/personal_information.json")
+        if r.status_code == 200:
+            user = (r.json().get("data") or {}).get("user", {})
+            if user.get("unique_id"):
+                print(f"[auth] Session valid — nickname: {user.get('nickname', '?')}")
+                return True
     except Exception:
         pass
     return False

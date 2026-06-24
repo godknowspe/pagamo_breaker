@@ -1,7 +1,6 @@
 .env
 .pagamo_token
 .pagamo_cookies.json
-.pagamo_cookies_helper.json
 .answer_cache.json
 __pycache__/
 *.pyc

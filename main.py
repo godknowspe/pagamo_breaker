@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 
 from pagamo.auth import login
 from pagamo.map_battle import run_battle
-from pagamo.oracle import Oracle
 
 load_dotenv()
 
@@ -43,8 +42,6 @@ def main():
                         help="Seconds to wait before submitting each answer (default 7, Gemini free tier needs >=6)")
     parser.add_argument("--no-cache", action="store_true",
                         help="Disable the learned answer cache (always use the LLM)")
-    parser.add_argument("--no-oracle", action="store_true",
-                        help="Disable the second-account answer oracle even if configured")
     args = parser.parse_args()
 
     if not args.gc_id:
@@ -60,11 +57,6 @@ def main():
 
     session = login(account, password)
 
-    # Optional second-account answer oracle (PAGAMO_ACCOUNT_2 / PAGAMO_PASSWORD_2)
-    oracle = None if args.no_oracle else Oracle.from_env()
-    if oracle:
-        print("[main] Answer oracle enabled (helper account)")
-
     wins = 0
     for i in range(args.repeat):
         if args.repeat > 1:
@@ -79,7 +71,6 @@ def main():
             scan_radius=args.radius,
             answer_delay=args.delay,
             use_cache=not args.no_cache,
-            oracle=oracle,
         )
         if won:
             wins += 1
