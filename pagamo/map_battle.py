@@ -161,6 +161,11 @@ def run_battle(
     if use_cache:
         _learn_answers(session, parsed)
 
+    # On a winning attack the hex is now ours — remember it so the next scan
+    # expands past it into new frontier instead of re-targeting it.
+    if victory and battle_type == "attack":
+        map_scanner.mark_captured(cur_x, cur_y)
+
     return bool(victory)
 
 

@@ -27,7 +27,7 @@ httpx API client  ◄─────────────┘
 - Learned answer cache — official answers fetched post-battle, reused for free on repeats
 - LLM-powered answering (Google Gemini by default, Claude as fallback) for new questions
 - Auto-retry on quota exhaustion with countdown timer
-- Auto map scan — expands ring-by-ring through your own territory to the border, then attacks the first enemy or empty hex it finds (for expansion)
+- Auto frontier expansion — flood-fills through your own territory to its border, attacks the first enemy/empty hex, and remembers the map locally so each scan spirals outward from where the last one left off (only unknown border hexes cost a request)
 - `--repeat N` for multiple battles, `--no-cache` to disable the cache
 
 ## Setup
@@ -94,7 +94,7 @@ pagamo/
   auth.py                Playwright login, cookie caching
   graphql_client.py      GraphQL mutations (answerOnMap, submitRoom, giveUpQuestion)
   map_battle.py          battle loop with quota/room-busy/own-territory recovery
-  map_scanner.py         hexagon_info scanner — finds nearest attackable enemy hex
+  map_scanner.py         flood-fill frontier finder + local map memory (.territory_map.json)
   answer_cache.py        persistent JSON cache keyed by questionId
   question.py            parse GraphQL question objects → clean dict
 llm/
@@ -108,7 +108,7 @@ tools/
 - **Quota system**: each battle costs ~30 quota; regen rate is 600/hr (~3 min/battle). The bot waits automatically.
 - **Fill-in questions**: not yet automated — skipped with a blank answer.
 - **Training cap**: own hexes can only be trained up to a server-side limit per period.
-- **Scan speed**: auto-scan calls `hexagon_info` per hex and walks outward through your own territory to the border, so a large contiguous territory means more hexes to check before reaching the frontier. It stops early once it crosses into empty space.
+- **Scan speed**: the first scan flood-fills your whole territory once (one `hexagon_info` request per owned hex, throttle-spaced by `SCAN_DELAY`); after that the map is cached in `.territory_map.json` and only newly-revealed border hexes are probed, so repeat scans are nearly free.
 
 ## Disclaimer
 

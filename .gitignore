@@ -2,6 +2,7 @@
 .pagamo_token
 .pagamo_cookies.json
 .answer_cache.json
+.territory_map.json
 __pycache__/
 *.pyc
 .playwright/
