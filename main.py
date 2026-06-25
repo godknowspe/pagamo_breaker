@@ -35,8 +35,8 @@ def main():
                         help="Number of battles to run")
     parser.add_argument("--auto", action="store_true",
                         help="Auto-scan nearby hexes to find enemy targets (attack mode)")
-    parser.add_argument("--radius", type=int, default=5,
-                        help="Scan radius for --auto mode (default 5)")
+    parser.add_argument("--radius", type=int, default=30,
+                        help="Max scan radius (rings) when expanding to the territory border (default 30)")
     parser.add_argument("--delay", type=float,
                         default=float(os.getenv("ANSWER_DELAY", "7")),
                         help="Seconds to wait before submitting each answer (default 7, Gemini free tier needs >=6)")

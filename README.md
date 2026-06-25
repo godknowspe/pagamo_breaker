@@ -27,7 +27,7 @@ httpx API client  ◄─────────────┘
 - Learned answer cache — official answers fetched post-battle, reused for free on repeats
 - LLM-powered answering (Google Gemini by default, Claude as fallback) for new questions
 - Auto-retry on quota exhaustion with countdown timer
-- Auto map scan — finds nearest attackable enemy hex when current target is own territory
+- Auto map scan — expands ring-by-ring through your own territory to the border, then attacks the first enemy or empty hex it finds (for expansion)
 - `--repeat N` for multiple battles, `--no-cache` to disable the cache
 
 ## Setup
@@ -74,8 +74,8 @@ python main.py --repeat 10
 # Training mode on own hex (no scan needed)
 python main.py --hex-x -5121 --hex-y -1450 --type train
 
-# Larger scan radius if default (5) doesn't find enemies
-python main.py --radius 10
+# Larger max scan radius if your territory is bigger than the default 30 rings
+python main.py --radius 50
 ```
 
 ## Finding your hex coordinates and gc_id
@@ -108,7 +108,7 @@ tools/
 - **Quota system**: each battle costs ~30 quota; regen rate is 600/hr (~3 min/battle). The bot waits automatically.
 - **Fill-in questions**: not yet automated — skipped with a blank answer.
 - **Training cap**: own hexes can only be trained up to a server-side limit per period.
-- **Scan speed**: auto-scan calls `hexagon_info` per hex; radius=5 checks up to ~120 hexes (~10-30 s).
+- **Scan speed**: auto-scan calls `hexagon_info` per hex and walks outward through your own territory to the border, so a large contiguous territory means more hexes to check before reaching the frontier. It stops early once it crosses into empty space.
 
 ## Disclaimer
 
