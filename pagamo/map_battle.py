@@ -64,8 +64,10 @@ def run_battle(
             return False
         tried.add((cur_x, cur_y))
         print(f"[battle] {reason} — scanning for another enemy hex...")
+        # Always flood-fill from the original home hex (guaranteed mine),
+        # not cur_x/cur_y which may be an empty/enemy hex after a rescan.
         result = map_scanner.find_attack_target(
-            session, cur_x, cur_y, own_gc_id, scan_radius, exclude=tried)
+            session, hex_x, hex_y, own_gc_id, scan_radius, exclude=tried)
         if result is None:
             if no_question_hits >= 3:
                 # Every scanned enemy hex had no questions → mission/daily bank exhausted,
